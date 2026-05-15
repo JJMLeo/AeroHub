@@ -1,0 +1,21 @@
+# 忽略签名和密钥文件
+*.p12
+*.jks
+*.keystore
+*.cer
+*.p7b
+*.csr
+
+# 忽略可能包含敏感信息的本地配置文件
+/build-profile.json5
+signing-config.local.json
+.env
+
+# 忽略IDE和系统生成的文件
+/.deveco/
+/.idea/
+*.iml
+/build/
+/node_modules/
+/.preview/
+/oh_modules/

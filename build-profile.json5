@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "release",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\Aming\\.ohos\\config\\release_AeroHub_-Unse3iv9aN_NXEMeS0RGNJo8oKPz_Iddx87c66CSgw=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001A21BC12BD1056916E919FA6D14F9665DB358EFD4CE802488350537F0326C74A325FF854861D23",
+          "profile": "C:\\Users\\Aming\\.ohos\\config\\release_AeroHub_-Unse3iv9aN_NXEMeS0RGNJo8oKPz_Iddx87c66CSgw=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\Aming\\.ohos\\config\\release_AeroHub_-Unse3iv9aN_NXEMeS0RGNJo8oKPz_Iddx87c66CSgw=.p12",
+          "storePassword": "0000001A57A5CFF36BCA7678FD91F50ED34AF0D7240CB222AEB925C5B072FC6ABB62F7F1EE05FE508B0C"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "release",
+        "targetSdkVersion": "6.0.2(22)",
+        "compatibleSdkVersion": "6.0.2(22)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

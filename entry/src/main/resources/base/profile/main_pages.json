@@ -1,0 +1,9 @@
+{
+  "src": [
+    "pages/Main",
+    "pages/Aerodynamics",
+    "pages/StandardAtmosphere",
+    "pages/ThermodynamicProperties",
+    "pages/UnitConverter"
+  ]
+}
