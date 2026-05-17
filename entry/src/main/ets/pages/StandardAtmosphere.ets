@@ -1,6 +1,7 @@
 // 标准大气计算页面
 import router from '@ohos.router';
 import { GasProperties, AtmResult, AirProps, ResultItem, HistoryItem } from '../utils/GasProperties';
+import { HistoryManager } from '../utils/HistoryManager';
 
 
 @Entry
@@ -14,7 +15,6 @@ struct StandardAtmosphere {
   @State resultsImperial: ResultItem[] = [];  // 英制单位结果
   @State refreshFlag: number = 0;
   @State history: HistoryItem[] = [];
-  private lastInputSnapshot: string = '';
   // 防止单位切换时触发onFocus清空
   private preventFocusClear: boolean = false;
 
@@ -35,6 +35,11 @@ struct StandardAtmosphere {
   // 热力学单位转换常数
   private readonly JKGK_TO_FTLBFLBR: number = 0.185863;      // J/(kg·K) 到 ft·lbf/(lb·°R)
   private readonly JKGK_TO_BTULBR: number = 0.000238846;    // J/(kg·K) 到 Btu/(lb·°R)
+  
+  // 页面加载时获取历史记录
+  aboutToAppear(): void {
+    this.history = HistoryManager.getInstance().getHistory('StandardAtmosphere');
+  }
 
   build() {
     Column() {
@@ -204,17 +209,22 @@ struct StandardAtmosphere {
           Column() {
             ForEach(this.history, (item: HistoryItem, index: number) => {
               Row() {
-                Text(`${this.history.length - index}. ${item.resultSummary}`)
+                Text(`${this.history.length - index}.`)
                   .fontSize(12)
                   .fontColor($r('app.color.primary_text'))
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width(24)
+
+                Text(item.resultSummary)
+                  .fontSize(12)
+                  .fontColor($r('app.color.primary_text'))
+                  .fontFamily('monospace') // 使用等宽字体以支持Tab对齐
                   .layoutWeight(1)
 
                 if (item.isISA) {
                   Text('标准大气')
                     .fontSize(11)
                     .fontColor($r('app.color.hint_text'))
+                    .width(50)
                 }
               }
               .width('100%')
@@ -352,14 +362,12 @@ struct StandardAtmosphere {
 
     // 添加到历史记录
     const currentSnapshot = `${altVal}|${this.altitudeUnit}|${this.unitSystem}`;
-    if (currentSnapshot !== this.lastInputSnapshot) {
-      const altKm = altitudeM / 1000;
-      const newEntry: HistoryItem = {
-        resultSummary: `H=${this.formatNumber(altKm, 1)}km, T=${this.formatNumber(resultSI.Ts - 273.15, 1)}°C, P=${this.formatNumber(resultSI.Ps / 1000, 1)}kPa`,
-        isISA: true
-      };
-      this.history = [newEntry, ...this.history].slice(0, 20);
-      this.lastInputSnapshot = currentSnapshot;
-    }
+    const altKm = altitudeM / 1000;
+    const newEntry: HistoryItem = {
+      resultSummary: `H=${this.formatNumber(altKm, 1)}km\tT=${this.formatNumber(resultSI.Ts - 273.15, 1)}°C\tP=${this.formatNumber(resultSI.Ps / 1000, 1)}kPa`,
+      isISA: true
+    };
+    HistoryManager.getInstance().addHistory('StandardAtmosphere', newEntry, currentSnapshot);
+    this.history = HistoryManager.getInstance().getHistory('StandardAtmosphere');
   }
 }

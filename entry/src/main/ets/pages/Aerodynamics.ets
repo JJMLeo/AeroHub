@@ -1,5 +1,6 @@
 import router from '@ohos.router';
 import { GasProperties, ResultItem, HistoryItem } from '../utils/GasProperties';
+import { HistoryManager } from '../utils/HistoryManager';
 
 @Entry
 @Component
@@ -15,9 +16,13 @@ struct Aerodynamics {
   @State results: ResultItem[] = [];
   @State refreshFlag: number = 0;
   @State history: HistoryItem[] = [];
-  private lastInputSnapshot: string = '';
   // 防止单位切换时触发onFocus清空
   private preventFocusClear: boolean = false;
+  
+  // 页面加载时获取历史记录
+  aboutToAppear(): void {
+    this.history = HistoryManager.getInstance().getHistory('Aerodynamics');
+  }
 
   build() {
     Column() {
@@ -268,17 +273,22 @@ struct Aerodynamics {
           Column() {
             ForEach(this.history, (item: HistoryItem, index: number) => {
               Row() {
-                Text(`${this.history.length - index}. ${item.resultSummary}`)
+                Text(`${this.history.length - index}.`)
                   .fontSize(12)
                   .fontColor($r('app.color.primary_text'))
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width(24)
+
+                Text(item.resultSummary)
+                  .fontSize(12)
+                  .fontColor($r('app.color.primary_text'))
+                  .fontFamily('monospace') // 使用等宽字体以支持Tab对齐
                   .layoutWeight(1)
 
                 if (item.isISA) {
                   Text('ISA')
                     .fontSize(11)
                     .fontColor($r('app.color.hint_text'))
+                    .width(30)
                 }
               }
               .width('100%')
@@ -448,14 +458,12 @@ struct Aerodynamics {
 
     // 历史记录
     const currentSnapshot = `${altVal}|${this.altitudeUnit}|${this.tempType}|${tempVal}|${this.tempUnit}|${this.speedType}|${spdVal}`;
-    if (currentSnapshot !== this.lastInputSnapshot) {
-      const tempC = Ts - 273.15;
-      const newEntry: HistoryItem = {
-        resultSummary: `Ma=${GasProperties.formatNumber(Ma, 3)}, H=${GasProperties.formatNumber(altKm, 1)}km, T=${GasProperties.formatNumber(tempC, 1)}°C`,
-        isISA: isStandard
-      };
-      this.history = [newEntry, ...this.history].slice(0, 20);
-      this.lastInputSnapshot = currentSnapshot;
-    }
+    const tempC = Ts - 273.15;
+    const newEntry: HistoryItem = {
+      resultSummary: `Ma=${GasProperties.formatNumber(Ma, 3)}\tH=${GasProperties.formatNumber(altKm, 1)}km\tT=${GasProperties.formatNumber(tempC, 1)}°C`,
+      isISA: isStandard
+    };
+    HistoryManager.getInstance().addHistory('Aerodynamics', newEntry, currentSnapshot);
+    this.history = HistoryManager.getInstance().getHistory('Aerodynamics');
   }
 }

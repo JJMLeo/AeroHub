@@ -1,6 +1,7 @@
 // 物性参数计算页面
 import router from '@ohos.router';
 import { GasProperties, ResultItem, HistoryItem } from '../utils/GasProperties';
+import { HistoryManager } from '../utils/HistoryManager';
 
 @Entry
 @Component
@@ -15,7 +16,6 @@ struct ThermodynamicProperties {
   @State results: ResultItem[] = [];
   @State refreshFlag: number = 0;
   @State history: HistoryItem[] = [];
-  private lastInputSnapshot: string = '';
   // 防止单位切换时触发onFocus清空
   private preventFocusClear: boolean = false;
 
@@ -47,6 +47,11 @@ struct ThermodynamicProperties {
   private readonly antoineA: number = 8.07131;
   private readonly antoineB: number = 1730.63;
   private readonly antoineC: number = 233.426;
+  
+  // 页面加载时获取历史记录
+  aboutToAppear(): void {
+    this.history = HistoryManager.getInstance().getHistory('ThermodynamicProperties');
+  }
 
   build() {
     Column() {
@@ -302,17 +307,22 @@ struct ThermodynamicProperties {
           Column() {
             ForEach(this.history, (item: HistoryItem, index: number) => {
               Row() {
-                Text(`${this.history.length - index}. ${item.resultSummary}`)
+                Text(`${this.history.length - index}.`)
                   .fontSize(12)
                   .fontColor($r('app.color.primary_text'))
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width(24)
+
+                Text(item.resultSummary)
+                  .fontSize(12)
+                  .fontColor($r('app.color.primary_text'))
+                  .fontFamily('monospace') // 使用等宽字体以支持Tab对齐
                   .layoutWeight(1)
 
                 if (item.isISA) {
                   Text('标准')
                     .fontSize(11)
                     .fontColor($r('app.color.hint_text'))
+                    .width(30)
                 }
               }
               .width('100%')
@@ -505,14 +515,12 @@ struct ThermodynamicProperties {
     
     // 添加到历史记录
     const currentSnapshot = `${fuelAirRatio}|${waterAirRatio}|${T}|${P}`;
-    if (currentSnapshot !== this.lastInputSnapshot) {
-      const newEntry: HistoryItem = {
-        resultSummary: `f=${GasProperties.formatNumber(fuelAirRatio * 100, 2)}%, w=${GasProperties.formatNumber(waterAirRatio * 100, 2)}%, T=${GasProperties.formatNumber(T - 273.15, 1)}°C, P=${GasProperties.formatNumber(P / 1000, 1)}kPa`,
-        isISA: Math.abs(T - 288.15) < 1 && Math.abs(P - 101325) < 100
-      };
-      this.history = [newEntry, ...this.history].slice(0, 20);
-      this.lastInputSnapshot = currentSnapshot;
-    }
+    const newEntry: HistoryItem = {
+      resultSummary: `f=${GasProperties.formatNumber(fuelAirRatio * 100, 2)}%\tw=${GasProperties.formatNumber(waterAirRatio * 100, 2)}%\tT=${GasProperties.formatNumber(T - 273.15, 1)}°C\tP=${GasProperties.formatNumber(P / 1000, 1)}kPa`,
+      isISA: Math.abs(T - 288.15) < 1 && Math.abs(P - 101325) < 100
+    };
+    HistoryManager.getInstance().addHistory('ThermodynamicProperties', newEntry, currentSnapshot);
+    this.history = HistoryManager.getInstance().getHistory('ThermodynamicProperties');
   }
 }
 

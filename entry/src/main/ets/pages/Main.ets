@@ -39,16 +39,32 @@ struct Main {
     }
   ];
 
+  // 注册自定义花体字
+  aboutToAppear() {
+    this.getUIContext().getFont().registerFont({
+      familyName: 'AeroHubFont',
+      familySrc: $rawfile('font/DancingScript-Medium.ttf')
+    });
+  }
+
   build() {
     Column() {
       // 应用标题
-      Text('计算工具')
-        .fontSize(24)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.secondary_text'))
-        .margin({ top: 40, bottom: 30 })
-        .width('100%')
-        .textAlign(TextAlign.Center)
+      Column() {
+        Text('AeroHub')
+          .fontSize(32)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.secondary_text'))
+          .fontStyle(FontStyle.Italic)
+          .letterSpacing(4)
+          .fontFamily('AeroHubFont')
+        
+        Text('气动计算工具')
+          .fontSize(20)
+          .fontColor($r('app.color.secondary_text'))
+          .margin({ top: 8 })
+      }
+      .margin({ top: 50, bottom: 40 })
 
       // 功能网格
       Grid() {
@@ -120,6 +136,7 @@ struct Main {
           .fontWeight(FontWeight.Medium)
           .fontStyle(FontStyle.Italic)
           .letterSpacing(0.5)
+          .fontFamily('AeroHubFont')
       }
       .margin({ top: 30, bottom: 20 })
       .width('100%')

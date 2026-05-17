@@ -1,6 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { HistoryManager } from '../utils/HistoryManager';
 
 const DOMAIN = 0x0000;
 
@@ -12,6 +13,9 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+    
+    // 应用启动时清空历史记录
+    HistoryManager.getInstance().clearAllHistory();
   }
 
   onDestroy(): void {

@@ -1,5 +1,7 @@
 ﻿// 单位换算页面
 import router from '@ohos.router';
+import { PreferencesUtil, UnitConverterSettings } from '../utils/PreferencesUtil';
+import { common } from '@kit.AbilityKit';
 
 interface ParameterType {
   label: string;
@@ -166,6 +168,7 @@ conversionFactors.massFlow = factorsData.massFlow;
 @Entry
 @Component
 struct UnitConverter {
+  private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
   private typeScroller: Scroller = new Scroller();
   @State selectedType: string = 'length';
   @State leftValue: string = '1';
@@ -187,6 +190,77 @@ struct UnitConverter {
   private preventFocusClear: boolean = false;
   // 记录当前活跃的输入端（'left' 或 'right'）
   private activeInput: 'left' | 'right' = 'left';
+  // 保存设置的定时器
+  private saveSettingsTimer: number | null = null;
+  
+  // 防抖保存设置
+  private saveSettingsDebounced(): void {
+    if (this.saveSettingsTimer) {
+      clearTimeout(this.saveSettingsTimer);
+    }
+    this.saveSettingsTimer = setTimeout(async () => {
+      try {
+        await PreferencesUtil.getInstance().saveUnitConverterSettings({
+          selectedType: this.selectedType,
+          leftUnit: this.leftUnit,
+          rightUnit: this.rightUnit,
+          leftValue: this.leftValue
+        });
+      } catch (err) {
+        console.error(`[UnitConverter] Failed to save settings: ${JSON.stringify(err)}`);
+      }
+    }, 500);
+  }
+  
+  // 页面即将显示时加载保存的设置
+  async aboutToAppear() {
+    try {
+      // 初始化Preferences
+      await PreferencesUtil.getInstance().init(this.context);
+      
+      // 获取上次使用的参数类型
+      const lastType = await PreferencesUtil.getInstance().getLastSelectedType();
+      
+      // 加载该参数类型的设置
+      const settings = await PreferencesUtil.getInstance().getUnitConverterSettings(lastType);
+      
+      if (settings) {
+        // 恢复保存的设置
+        this.selectedType = settings.selectedType;
+        this.leftUnit = settings.leftUnit;
+        this.rightUnit = settings.rightUnit;
+        this.leftValue = settings.leftValue;
+        
+        // 执行换算
+        this.convertFromLeft();
+        this.showResults = true;
+      } else {
+        // 如果没有保存的设置，使用默认值
+        this.showResults = true;
+        this.convertFromLeft();
+      }
+    } catch (err) {
+      console.error(`[UnitConverter] Failed to load settings: ${JSON.stringify(err)}`);
+      // 加载失败时使用默认值
+      this.showResults = true;
+      this.convertFromLeft();
+    }
+  }
+  
+  // 页面即将消失时保存当前设置
+  async aboutToDisappear() {
+    try {
+      // 保存当前设置
+      await PreferencesUtil.getInstance().saveUnitConverterSettings({
+        selectedType: this.selectedType,
+        leftUnit: this.leftUnit,
+        rightUnit: this.rightUnit,
+        leftValue: this.leftValue
+      });
+    } catch (err) {
+      console.error(`[UnitConverter] Failed to save settings: ${JSON.stringify(err)}`);
+    }
+  }
 
   build() {
     Column() {
@@ -224,15 +298,61 @@ struct UnitConverter {
               .padding({ left: 12, right: 12, top: 8, bottom: 8 })
               .backgroundColor(this.selectedType === item.value ? $r('app.color.accent_light') : $r('app.color.card_bg'))
               .borderRadius(20)
-              .onClick(() => {
+              .onClick(async () => {
                 this.preventFocusClear = true;
                 this.activeInput = 'left';  // 切换类型时重置为左侧活跃
+                
+                // 保存当前参数类型的设置
+                try {
+                  await PreferencesUtil.getInstance().saveUnitConverterSettings({
+                    selectedType: this.selectedType,
+                    leftUnit: this.leftUnit,
+                    rightUnit: this.rightUnit,
+                    leftValue: this.leftValue
+                  });
+                } catch (err) {
+                  console.error(`[UnitConverter] Failed to save settings: ${JSON.stringify(err)}`);
+                }
+                
+                // 切换到新的参数类型
                 this.selectedType = item.value;
-                this.leftUnit = item.units[0];
-                this.rightUnit = item.units[1] || item.units[0];
-                this.leftValue = '1';
+                
+                // 尝试加载新参数类型的设置
+                try {
+                  const settings = await PreferencesUtil.getInstance().getUnitConverterSettings(item.value);
+                  if (settings) {
+                    // 恢复保存的设置
+                    this.leftUnit = settings.leftUnit;
+                    this.rightUnit = settings.rightUnit;
+                    this.leftValue = settings.leftValue;
+                  } else {
+                    // 如果没有保存的设置，使用默认值
+                    this.leftUnit = item.units[0];
+                    this.rightUnit = item.units[1] || item.units[0];
+                    this.leftValue = '1';
+                  }
+                } catch (err) {
+                  console.error(`[UnitConverter] Failed to load settings: ${JSON.stringify(err)}`);
+                  // 加载失败时使用默认值
+                  this.leftUnit = item.units[0];
+                  this.rightUnit = item.units[1] || item.units[0];
+                  this.leftValue = '1';
+                }
+                
                 this.convertFromLeft();
                 this.refreshFlag++;
+                
+                // 清除焦点，防止输入框自动获得焦点
+                try {
+                  this.getUIContext().getFocusController().clearFocus();
+                } catch (err) {
+                  console.error(`[UnitConverter] Failed to clear focus: ${JSON.stringify(err)}`);
+                }
+                
+                // 延迟重置标志，确保后续点击能正常清空
+                setTimeout(() => {
+                  this.preventFocusClear = false;
+                }, 100);
               })
           }, (item: ParameterType) => item.value)
         }
@@ -254,23 +374,67 @@ struct UnitConverter {
             .shadow({ radius: 0 })
             .backgroundColor($r('app.color.input_bg'))
             .layoutWeight(1)
-            .onSelect((index: number, value: string) => {
+            .onSelect(async (index: number, value: string) => {
               this.preventFocusClear = true;
               this.leftUnit = value;
-              // 根据当前活跃输入端决定换算方向
-              if (this.activeInput === 'right') {
-                this.convertFromRight();
-              } else {
+              // 更换左侧单位时，保留左侧输入，换算右侧
+              // 如果最后输入在左侧，从左侧换算到右侧
+              // 如果最后输入在右侧，从右侧换算到左侧（保留右侧输入）
+              if (this.activeInput === 'left') {
                 this.convertFromLeft();
+              } else {
+                this.convertFromRight();
               }
+              // 保存设置
+              try {
+                await PreferencesUtil.getInstance().saveUnitConverterSettings({
+                  selectedType: this.selectedType,
+                  leftUnit: this.leftUnit,
+                  rightUnit: this.rightUnit,
+                  leftValue: this.leftValue
+                });
+              } catch (err) {
+                console.error(`[UnitConverter] Failed to save settings: ${JSON.stringify(err)}`);
+              }
+              // 延迟重置标志，确保后续点击能正常清空
+              setTimeout(() => {
+                this.preventFocusClear = false;
+              }, 100);
             })
 
-          Text('⇄')
+          Button('⇄')
             .fontSize(20)
             .fontColor($r('app.color.accent'))
-            .margin({ left: 12, right: 12 })
-            .alignSelf(ItemAlign.Center)
-            .textAlign(TextAlign.Center)
+            .width(50)
+            .height(40)
+            .backgroundColor(Color.Transparent)
+            .borderRadius(4)
+            .margin({ left: 8, right: 8 })
+            .onClick(async () => {
+              // 交换左右单位
+              const tempUnit = this.leftUnit;
+              this.leftUnit = this.rightUnit;
+              this.rightUnit = tempUnit;
+              
+              // 重新换算
+              if (this.activeInput === 'left') {
+                this.convertFromLeft();
+              } else {
+                this.convertFromRight();
+              }
+              
+              // 保存设置
+              try {
+                await PreferencesUtil.getInstance().saveUnitConverterSettings({
+                  selectedType: this.selectedType,
+                  leftUnit: this.leftUnit,
+                  rightUnit: this.rightUnit,
+                  leftValue: this.leftValue
+                });
+              } catch (err) {
+                console.error(`[UnitConverter] Failed to save settings: ${JSON.stringify(err)}`);
+              }
+            })
 
           Select(this.getCurrentUnits().map(unit => ({ value: unit } as SelectOption)))
             .value(this.rightUnit)
@@ -281,15 +445,32 @@ struct UnitConverter {
             .shadow({ radius: 0 })
             .backgroundColor($r('app.color.input_bg'))
             .layoutWeight(1)
-            .onSelect((index: number, value: string) => {
+            .onSelect(async (index: number, value: string) => {
               this.preventFocusClear = true;
               this.rightUnit = value;
-              // 根据当前活跃输入端决定换算方向
-              if (this.activeInput === 'right') {
-                this.convertFromRight();
-              } else {
+              // 更换右侧单位时，保留右侧输入，换算左侧
+              // 如果最后输入在左侧，从左侧换算到右侧（保留左侧输入）
+              // 如果最后输入在右侧，从右侧换算到左侧
+              if (this.activeInput === 'left') {
                 this.convertFromLeft();
+              } else {
+                this.convertFromRight();
               }
+              // 保存设置
+              try {
+                await PreferencesUtil.getInstance().saveUnitConverterSettings({
+                  selectedType: this.selectedType,
+                  leftUnit: this.leftUnit,
+                  rightUnit: this.rightUnit,
+                  leftValue: this.leftValue
+                });
+              } catch (err) {
+                console.error(`[UnitConverter] Failed to save settings: ${JSON.stringify(err)}`);
+              }
+              // 延迟重置标志，确保后续点击能正常清空
+              setTimeout(() => {
+                this.preventFocusClear = false;
+              }, 100);
             })
         }
         .width('100%')
@@ -314,10 +495,18 @@ struct UnitConverter {
                 this.skipLeftChange = false;
                 return;
               }
+              // 处理前导零问题
+              let processedValue = value;
+              if (value && value !== '0') {
+                // 去除前导零，但保留小数点后的零（如0.5）
+                processedValue = value.replace(/^0+(?=\d)/, '');
+              }
               this.activeInput = 'left';
-              this.leftValue = value;
+              this.leftValue = processedValue;
               this.convertFromLeft();
-              if (value !== '') this.showResults = true;
+              if (processedValue !== '') this.showResults = true;
+              // 保存设置（使用防抖，避免频繁保存）
+              this.saveSettingsDebounced();
             })
             .onFocus(() => {
               if (this.preventFocusClear) {
@@ -346,10 +535,18 @@ struct UnitConverter {
                 this.skipRightChange = false;
                 return;
               }
+              // 处理前导零问题
+              let processedValue = value;
+              if (value && value !== '0') {
+                // 去除前导零，但保留小数点后的零（如0.5）
+                processedValue = value.replace(/^0+(?=\d)/, '');
+              }
               this.activeInput = 'right';
-              this.rightValue = value;
+              this.rightValue = processedValue;
               this.convertFromRight();
-              if (value !== '') this.showResults = true;
+              if (processedValue !== '') this.showResults = true;
+              // 保存设置（使用防抖，避免频繁保存）
+              this.saveSettingsDebounced();
             })
             .onFocus(() => {
               if (this.preventFocusClear) {
@@ -454,7 +651,7 @@ struct UnitConverter {
             .margin({ bottom: 8 })
             Row() {
               Blank().layoutWeight(1)
-              Button('⇄').width(60).height(36).fontSize(18).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent).borderRadius(18)
+              Button('⇄').width(65).height(36).fontSize(18).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent).borderRadius(18)
                 .onClick(() => {
                   const temp = this.formulaFromUnit;
                   this.formulaFromUnit = this.formulaToUnit;
@@ -688,7 +885,7 @@ struct UnitConverter {
     }
     if (this.selectedType === 'temperature') {
       let formula = `1 ${fromUnit} = 1 ${toUnit}`;
-      if (fromUnit === 'K' && toUnit === '°C') formula = 'K = °C + 273.15';
+      if (fromUnit === 'K' && toUnit === '°C') formula = '°C = K - 273.15';
       else if (fromUnit === 'K' && toUnit === '°F') formula = '°F = (K - 273.15) × 9/5 + 32';
       else if (fromUnit === 'K' && toUnit === '°R') formula = '°R = K × 9/5';
       else if (fromUnit === '°C' && toUnit === 'K') formula = 'K = °C + 273.15';
