@@ -490,6 +490,15 @@ struct UnitConverter {
             .padding({ left: 12, right: 12 })
             .layoutWeight(1)
             .placeholderColor($r('app.color.hint_text'))
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.activeInput = 'left';
+              this.leftValue = '';
+              this.showResults = false;
+            })
             .onChange((value: string) => {
               if (this.skipLeftChange) {
                 this.skipLeftChange = false;
@@ -530,6 +539,15 @@ struct UnitConverter {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .layoutWeight(1)
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.activeInput = 'right';
+              this.rightValue = '';
+              this.showResults = false;
+            })
             .onChange((value: string) => {
               if (this.skipRightChange) {
                 this.skipRightChange = false;

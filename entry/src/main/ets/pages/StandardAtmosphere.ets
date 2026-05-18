@@ -2,7 +2,15 @@
 import router from '@ohos.router';
 import { GasProperties, AtmResult, AirProps, ResultItem, HistoryItem } from '../utils/GasProperties';
 import { HistoryManager } from '../utils/HistoryManager';
+import { TemperatureCurveData, TemperaturePoint, CalculatedTemperatures, TemperatureRange } from '../utils/TemperatureCurveData';
 
+// 绘图区域边距接口
+interface ChartPadding {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
 
 @Entry
 @Component
@@ -17,6 +25,13 @@ struct StandardAtmosphere {
   @State history: HistoryItem[] = [];
   // 防止单位切换时触发onFocus清空
   private preventFocusClear: boolean = false;
+  
+  // 曲线图相关状态
+  @State showChart: boolean = false;  // 是否显示曲线图
+  @State axisSwapped: boolean = false;  // 是否交换横纵坐标轴
+  @State calculatedAltitude: number = -1;  // 计算的高度值(km)，-1表示未计算
+  @State calculatedTemps: CalculatedTemperatures | null = null;  // 计算高度的温度值
+  private curveData: TemperaturePoint[] = TemperatureCurveData.getCurveData();  // 曲线数据
 
   // 物理常数（标准大气模型参数）
   private readonly g0: number = 9.80665;          // 重力加速度 (m/s²)
@@ -91,6 +106,10 @@ struct StandardAtmosphere {
             .onSelect((index: number, value: string) => {
               this.preventFocusClear = true;
               this.altitudeUnit = value;
+              // 切换单位后重绘曲线
+              if (this.showChart) {
+                this.drawTemperatureCurves();
+              }
             })
 
           TextInput({ text: this.altitudeValue })
@@ -105,6 +124,13 @@ struct StandardAtmosphere {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.altitudeValue = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;
@@ -140,6 +166,10 @@ struct StandardAtmosphere {
               this.preventFocusClear = true;
               this.unitSystem = value;
               this.refreshFlag++;
+              // 切换单位后重绘曲线
+              if (this.showChart) {
+                this.drawTemperatureCurves();
+              }
             })
         }
         .width('100%')
@@ -161,28 +191,70 @@ struct StandardAtmosphere {
       Column() {
         Divider().strokeWidth(2).color($r('app.color.divider'))
 
-        Scroll() {
-          Column() {
-            if (this.unitSystem === '国际单位') {
-              ForEach(this.resultsSI,
-                (item: ResultItem, index: number) => { this.resultRow(item) },
-                (item: ResultItem, index: number) => `${index}-${item.label}-${item.unit}-${this.refreshFlag}`
-              )
-            } else {
-              ForEach(this.resultsImperial,
-                (item: ResultItem, index: number) => { this.resultRow(item) },
-                (item: ResultItem, index: number) => `${index}-${item.label}-${item.unit}-${this.refreshFlag}`
-              )
+        if (this.showChart) {
+          // 曲线图模式
+          Stack({ alignContent: Alignment.TopEnd }) {
+            // 曲线图Canvas
+            Column() {
+              Canvas(this.getChartContext())
+                .width('100%')
+                .height('100%')
+                .onReady(() => {
+                  this.drawTemperatureCurves();
+                })
             }
+            .width('100%')
+            .layoutWeight(1)
+            .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+            
+            // 隐蔽的坐标轴切换按钮（右上角，半透明）
+            Button(this.axisSwapped ? '纵轴:温度' : '纵轴:高度')
+              .fontSize(10)
+              .fontColor($r('app.color.hint_text'))
+              .backgroundColor(Color.Transparent)
+              .height(20)
+              .padding({ left: 4, right: 4 })
+              .margin({ top: 4, right: 4 })
+              .opacity(0.5)
+              .onClick(() => {
+                this.axisSwapped = !this.axisSwapped;
+                // 触发曲线重绘
+                this.drawTemperatureCurves();
+              })
           }
           .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 4 })
+          .layoutWeight(1)
+        } else {
+          // 结果表格模式
+          Scroll() {
+            Column() {
+              if (this.unitSystem === '国际单位') {
+                ForEach(this.resultsSI,
+                  (item: ResultItem, index: number) => { this.resultRow(item) },
+                  (item: ResultItem, index: number) => `${index}-${item.label}-${item.unit}-${this.refreshFlag}`
+                )
+              } else {
+                ForEach(this.resultsImperial,
+                  (item: ResultItem, index: number) => { this.resultRow(item) },
+                  (item: ResultItem, index: number) => `${index}-${item.label}-${item.unit}-${this.refreshFlag}`
+                )
+              }
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 8, bottom: 4 })
+          }
+          .layoutWeight(1)
+          .scrollBar(BarState.Auto)
         }
-        .layoutWeight(1)
-        .scrollBar(BarState.Auto)
       }
       .layoutWeight(4)
       .backgroundColor($r('app.color.card_bg'))
+      .onClick(() => {
+        // 点击空白处切换显示模式
+        if (this.resultsSI.length > 0 || this.resultsImperial.length > 0) {
+          this.showChart = !this.showChart;
+        }
+      })
 
       // ========== 历史记录区 ==========
       Column() {
@@ -328,7 +400,16 @@ struct StandardAtmosphere {
     const cp_imperial = airProps.cp * this.JKGK_TO_BTULBR; // Btu/(lb·°R)
     const cv_imperial = airProps.cv * this.JKGK_TO_BTULBR; // Btu/(lb·°R)
 
+    // 计算高度转换结果
+    const altKm = altitudeM / 1000;
+    const altFt = altKm * 3280.84;
+    const convertedAltValue = this.altitudeUnit === 'km' ? 
+      this.formatNumber(altFt, 0) : 
+      this.formatNumber(altKm, 2);
+    const convertedAltUnit = this.altitudeUnit === 'km' ? 'ft' : 'km';
+
     const resultsSI: ResultItem[] = [
+      { label: '高度', value: convertedAltValue, unit: convertedAltUnit },
       { label: '静温', value: this.formatNumber(resultSI.Ts, 2), unit: 'K' },
       { label: '  ', value: this.formatNumber(resultSI.Ts - 273.15, 2), unit: '°C' },
       { label: '静压', value: this.formatNumber(resultSI.Ps / 1000, 3), unit: 'kPa' },
@@ -344,6 +425,7 @@ struct StandardAtmosphere {
 
     // 英制单位结果（合并相同标签）
     const resultsImperial: ResultItem[] = [
+      { label: '高度', value: convertedAltValue, unit: convertedAltUnit },
       { label: '静温', value: this.formatNumber(resultImperial.Ts, 2), unit: '°F' },
       { label: '  ', value: this.formatNumber(resultSI.Ts * 9 / 5, 2), unit: '°R' },
       { label: '静压', value: this.formatNumber(resultImperial.Ps, 4), unit: 'psi' },
@@ -362,12 +444,264 @@ struct StandardAtmosphere {
 
     // 添加到历史记录
     const currentSnapshot = `${altVal}|${this.altitudeUnit}|${this.unitSystem}`;
-    const altKm = altitudeM / 1000;
     const newEntry: HistoryItem = {
       resultSummary: `H=${this.formatNumber(altKm, 1)}km\tT=${this.formatNumber(resultSI.Ts - 273.15, 1)}°C\tP=${this.formatNumber(resultSI.Ps / 1000, 1)}kPa`,
       isISA: true
     };
     HistoryManager.getInstance().addHistory('StandardAtmosphere', newEntry, currentSnapshot);
     this.history = HistoryManager.getInstance().getHistory('StandardAtmosphere');
+    
+    // 保存计算高度和温度值（用于曲线图标记）
+    this.calculatedAltitude = altKm;
+    this.calculatedTemps = TemperatureCurveData.getTemperaturesAtAltitude(altKm);
+    
+    // 如果当前显示曲线图，则更新曲线
+    if (this.showChart) {
+      this.drawTemperatureCurves();
+    }
+  }
+  
+  // 获取Canvas绘图上下文
+  private settings: RenderingContextSettings = new RenderingContextSettings(true);
+  private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.settings);
+  
+  private getChartContext(): CanvasRenderingContext2D {
+    return this.context;
+  }
+  
+  // 绘制温度曲线
+  private drawTemperatureCurves(): void {
+    const ctx = this.context;
+    const width = ctx.width;
+    const height = ctx.height;
+    
+    // 绘图区域边距（根据字体大小调整，大幅增加）
+    const padding: ChartPadding = { left: 70, right: 30, top: 30, bottom: 60 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    
+    // 清空画布
+    ctx.clearRect(0, 0, width, height);
+    
+    // 获取温度范围
+    const tempRange = TemperatureCurveData.getTemperatureRange();
+    let minTemp = tempRange.min;
+    let maxTemp = tempRange.max;
+    
+    // 如果是英制单位，将温度范围转换为华氏度
+    if (this.unitSystem === '英制单位') {
+      minTemp = minTemp * 9 / 5 + 32;
+      maxTemp = maxTemp * 9 / 5 + 32;
+    }
+    
+    const minAlt = 0;
+    const maxAlt = 18;
+    
+    // 坐标转换函数
+    const toX = this.axisSwapped ? 
+      (temp: number) => padding.left + (temp - minTemp) / (maxTemp - minTemp) * chartWidth :
+      (alt: number) => padding.left + alt / maxAlt * chartWidth;
+    
+    const toY = this.axisSwapped ?
+      (alt: number) => padding.top + (maxAlt - alt) / maxAlt * chartHeight :
+      (temp: number) => padding.top + (maxTemp - temp) / (maxTemp - minTemp) * chartHeight;
+    
+    // 绘制背景网格
+    ctx.strokeStyle = '#E0E0E0';
+    ctx.lineWidth = 0.5;
+    
+    // 绘制网格线
+    for (let alt = 0; alt <= 18; alt += 3) {
+      const x = this.axisSwapped ? toX(minTemp) : toX(alt);
+      const y = this.axisSwapped ? toY(alt) : toY(minTemp);
+      ctx.beginPath();
+      if (this.axisSwapped) {
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+      } else {
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, height - padding.bottom);
+      }
+      ctx.stroke();
+    }
+    
+    for (let temp = Math.ceil(minTemp / 20) * 20; temp <= maxTemp; temp += 20) {
+      const x = this.axisSwapped ? toX(temp) : toX(maxAlt);
+      const y = this.axisSwapped ? toY(maxAlt) : toY(temp);
+      ctx.beginPath();
+      if (this.axisSwapped) {
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, height - padding.bottom);
+      } else {
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+      }
+      ctx.stroke();
+    }
+    
+    // 绘制四周加粗边框
+    ctx.strokeStyle = '#333333';
+    ctx.lineWidth = 2.5;
+    // 左边框
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(padding.left, height - padding.bottom);
+    ctx.stroke();
+    // 右边框
+    ctx.beginPath();
+    ctx.moveTo(width - padding.right, padding.top);
+    ctx.lineTo(width - padding.right, height - padding.bottom);
+    ctx.stroke();
+    // 上边框
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(width - padding.right, padding.top);
+    ctx.stroke();
+    // 下边框
+    ctx.beginPath();
+    ctx.moveTo(padding.left, height - padding.bottom);
+    ctx.lineTo(width - padding.right, height - padding.bottom);
+    ctx.stroke();
+    
+    // 绘制坐标轴标签（大幅增大字体，确保清晰可见）
+    ctx.fillStyle = '#333333';
+    ctx.font = '24px sans-serif';
+    ctx.textAlign = 'center';
+    
+    // 获取当前单位
+    const altitudeUnitLabel = this.altitudeUnit;
+    const tempUnitLabel = this.unitSystem === '国际单位' ? '°C' : '°F';
+    
+    // X轴标签
+    if (this.axisSwapped) {
+      // X轴为温度
+      for (let temp = Math.ceil(minTemp / 20) * 20; temp <= maxTemp; temp += 20) {
+        const x = toX(temp);
+        ctx.fillText(`${temp}`, x, height - padding.bottom + 30);
+      }
+      ctx.font = '28px sans-serif';
+      ctx.fillText(`温度 (${tempUnitLabel})`, width / 2, height - 8);
+    } else {
+      // X轴为高度
+      for (let alt = 0; alt <= 18; alt += 3) {
+        const x = toX(alt);
+        ctx.fillText(`${alt}`, x, height - padding.bottom + 30);
+      }
+      ctx.font = '28px sans-serif';
+      ctx.fillText(`高度 (${altitudeUnitLabel})`, width / 2, height - 8);
+    }
+    
+    // Y轴标签
+    ctx.font = '24px sans-serif';
+    ctx.textAlign = 'right';
+    if (this.axisSwapped) {
+      // Y轴为高度
+      for (let alt = 0; alt <= 18; alt += 3) {
+        const y = toY(alt);
+        ctx.fillText(`${alt}`, padding.left - 15, y + 8);
+      }
+      ctx.save();
+      ctx.translate(25, height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.font = '28px sans-serif';
+      ctx.fillText(`高度 (${altitudeUnitLabel})`, 0, 0);
+      ctx.restore();
+    } else {
+      // Y轴为温度
+      for (let temp = Math.ceil(minTemp / 20) * 20; temp <= maxTemp; temp += 20) {
+        const y = toY(temp);
+        ctx.fillText(`${temp}`, padding.left - 15, y + 8);
+      }
+      ctx.save();
+      ctx.translate(25, height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.font = '28px sans-serif';
+      ctx.fillText(`温度 (${tempUnitLabel})`, 0, 0);
+      ctx.restore();
+    }
+    
+    // 绘制曲线函数
+    const drawCurve = (data: number[], color: string, lineWidth: number) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      
+      for (let i = 0; i < data.length; i++) {
+        const alt = i;
+        let temp = data[i];
+        // 如果是英制单位，将摄氏度转换为华氏度
+        if (this.unitSystem === '英制单位') {
+          temp = temp * 9 / 5 + 32;
+        }
+        const x = this.axisSwapped ? toX(temp) : toX(alt);
+        const y = this.axisSwapped ? toY(alt) : toY(temp);
+        
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+    };
+    
+    // 绘制三条曲线（修正颜色）
+    // 高温天曲线（红色）
+    const hotData = this.curveData.map(p => p.tempHot);
+    drawCurve(hotData, '#FF4444', 2.5);
+    
+    // 标准天曲线（绿色）
+    const stdData = this.curveData.map(p => p.tempStd);
+    drawCurve(stdData, '#44BB44', 2.5);
+    
+    // 低温天曲线（蓝色）
+    const coldData = this.curveData.map(p => p.tempCold);
+    drawCurve(coldData, '#4444FF', 2.5);
+    
+    // 如果有计算高度，绘制标记点
+    if (this.calculatedAltitude >= 0 && this.calculatedTemps) {
+      const alt = this.calculatedAltitude;
+      const temps = this.calculatedTemps;
+      
+      // 绘制三个标记点
+      const drawMarker = (tempC: number, color: string, label: string) => {
+        // 如果是英制单位，将摄氏度转换为华氏度
+        let temp = tempC;
+        if (this.unitSystem === '英制单位') {
+          temp = tempC * 9 / 5 + 32;
+        }
+        
+        const x = this.axisSwapped ? toX(temp) : toX(alt);
+        const y = this.axisSwapped ? toY(alt) : toY(temp);
+        
+        // 绘制圆点
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 8, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // 绘制白色内圈
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // 绘制数值标签（大幅增大字体）
+        ctx.fillStyle = color;
+        ctx.font = 'bold 22px sans-serif';
+        ctx.textAlign = 'left';
+        const labelX = x + 15;
+        const labelY = y - 5;
+        const tempUnitLabel = this.unitSystem === '国际单位' ? '°C' : '°F';
+        ctx.fillText(`${temp.toFixed(1)}${tempUnitLabel}`, labelX, labelY);
+      };
+      
+      // 绘制三个温度点标记（修正颜色）
+      drawMarker(temps.hot, '#FF4444', '高温');
+      drawMarker(temps.std, '#44BB44', '标准');
+      drawMarker(temps.cold, '#4444FF', '低温');
+    }
   }
 }

@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\Aming\\.ohos\\config\\release_AeroHub_-Unse3iv9aN_NXEMeS0RGNJo8oKPz_Iddx87c66CSgw=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001AAAEF20F4C2FD458A1C6B36C24A605197186D398B0DC52DB039911274392A666B18666374B128",
+          "keyPassword": "0000001B179F5F08A76AB89FA77F1007F1A983C62101DC4A2306420C4425EC40F06107B5A309B08DA5B797",
           "profile": "C:\\Users\\Aming\\.ohos\\config\\release_AeroHub_-Unse3iv9aN_NXEMeS0RGNJo8oKPz_Iddx87c66CSgw=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\Aming\\.ohos\\config\\release_AeroHub_-Unse3iv9aN_NXEMeS0RGNJo8oKPz_Iddx87c66CSgw=.p12",
-          "storePassword": "0000001A9A5403FE83FD4A158F8C5E03E68C7A6E48A2D98490017F205308B224B86A810C136F7E9534F0"
+          "storePassword": "0000001BF2D8BC9B524E28919CE225B772C2C0E67FB741C58DBBFA2ADAFE60C7CF42992E5C59B766864612"
         }
       }
     ],

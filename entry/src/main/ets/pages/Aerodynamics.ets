@@ -88,6 +88,13 @@ struct Aerodynamics {
             .fontColor($r('app.color.primary_text'))
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.altitudeValue = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;
@@ -157,6 +164,13 @@ struct Aerodynamics {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.tempInput = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;
@@ -206,6 +220,13 @@ struct Aerodynamics {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.speedValue = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;

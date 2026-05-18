@@ -100,6 +100,13 @@ struct ThermodynamicProperties {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.fuelAirRatio = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;
@@ -131,6 +138,13 @@ struct ThermodynamicProperties {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.waterAirRatio = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;
@@ -185,6 +199,13 @@ struct ThermodynamicProperties {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.temperature = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;
@@ -239,6 +260,13 @@ struct ThermodynamicProperties {
             .borderRadius(8)
             .padding({ left: 12, right: 12 })
             .constraintSize({ minWidth: 120 })
+            .onClick(() => {
+              if (this.preventFocusClear) {
+                this.preventFocusClear = false;
+                return;
+              }
+              this.pressure = '';
+            })
             .onFocus(() => {
               if (this.preventFocusClear) {
                 this.preventFocusClear = false;

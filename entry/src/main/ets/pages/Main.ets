@@ -120,7 +120,7 @@ struct Main {
 
       // 底部信息
       Column() {
-        Text('版本 1.0.0')
+        Text('版本 1.0.2')
           .fontSize(12)
           .fontColor($r('app.color.hint_text'))
           .margin({ bottom: 4 })
